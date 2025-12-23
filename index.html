@@ -140,7 +140,7 @@
   </div>
 
   <script>
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzzAHqdavGD-gzcBnogrF0-Qy8fSRuyaZZqDkdBJCW3t012UEVv7uM7tkFQfCOWNzBN6Q/exec";
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzTAAHiPG667RK07OUtdSCmMQjWcNQEf0NkFMeRS3EZprr38r-URE_olQs-ho8shlXEHg/exec";
     let MASTER_DATA = { toko: [], barang: [] };
     let CURRENT_MODE = "ONE_STORE";
     let TARGET_ROW_EL = null;
@@ -331,7 +331,7 @@
         }
       }
 
-      if(!rowValid || payload.length === 0) return; // PERBAIKAN: Berhenti jika validasi gagal
+      if(!rowValid || payload.length === 0) return;
 
       const btn = document.getElementById('btnSubmit');
       btn.disabled = true; btn.innerText = "SEDANG MENYIMPAN DATA...";
