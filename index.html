@@ -3,268 +3,344 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shopee Stock Sync</title>
+  <title>Gupro - System</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-    body { font-family: 'Roboto', sans-serif; background-color: #f5f5f5; }
+    body { font-family: 'Roboto', sans-serif; background-color: #f4f4f4; }
     .shopee-orange { background-color: #ee4d2d; }
     .text-shopee { color: #ee4d2d; }
     .hidden { display: none; }
     
-    /* Style untuk Toast */
-    #toast {
+    /* Toast Top Center */
+    #customToast {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      background: #333;
-      color: white;
-      border-radius: 8px;
+      top: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    #customToast.show { top: 20px; }
+
+    /* Modal Styling */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      z-index: 5000;
       display: flex;
       align-items: center;
-      gap: 10px;
-      z-index: 10000;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      transition: opacity 0.5s ease;
+      justify-content: center;
+      padding: 20px;
     }
-    .spinner-small {
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid #ee4d2d;
-      border-radius: 50%;
-      width: 16px;
-      height: 16px;
-      animation: spin 1s linear infinite;
+    
+    .modal-full { 
+      position: fixed; 
+      top: 0; left: 0; right: 0; bottom: 0; 
+      background: white; 
+      z-index: 1000; 
+      display: flex; 
+      flex-direction: column; 
     }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
-<body>
+<body class="bg-gray-100 min-h-screen pb-20">
 
-  <div id="toast">
-    <div class="spinner-small" id="toastSpinner"></div>
-    <span id="toastMsg">Sedang sinkronisasi data stok...</span>
-  </div>
-
-  <div id="landingPage" class="min-h-screen flex flex-col items-center justify-center p-6">
-    <div class="text-center mb-10">
-      <h1 class="text-4xl font-bold text-shopee mb-2">Pilih Mode Input</h1>
-      <p class="text-gray-600">Inventory Management System</p>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
-      <div onclick="startApp('ONE_STORE')" class="bg-white p-8 rounded shadow-sm border-2 border-transparent cursor-pointer hover:border-orange-500 text-center transition group">
-        <div class="text-4xl mb-4 group-hover:scale-110 transition">🏪</div>
-        <h3 class="font-bold uppercase text-gray-700">1 Toko Multi Item</h3>
-      </div>
-      <div onclick="startApp('ONE_ITEM')" class="bg-white p-8 rounded shadow-sm border-2 border-transparent cursor-pointer hover:border-orange-500 text-center transition group">
-        <div class="text-4xl mb-4 group-hover:scale-110 transition">📦</div>
-        <h3 class="font-bold uppercase text-gray-700">1 Item Multi Toko</h3>
-      </div>
-      <div onclick="startApp('BULK')" class="bg-white p-8 rounded shadow-sm border-2 border-transparent cursor-pointer hover:border-orange-500 text-center transition group">
-        <div class="text-4xl mb-4 group-hover:scale-110 transition">🚀</div>
-        <h3 class="font-bold uppercase text-gray-700">Multi Toko & Item</h3>
-      </div>
+  <div id="alertModal" class="modal-overlay hidden">
+    <div class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl transform scale-95 transition-transform">
+      <div class="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold">!</div>
+      <h3 class="text-xl font-black text-gray-800 mb-2">Stok Tidak Cukup</h3>
+      <p id="alertMsg" class="text-gray-500 text-sm mb-6 leading-relaxed">Mohon periksa kembali jumlah input Anda.</p>
+      <button onclick="closeAlert()" class="w-full py-4 shopee-orange text-white rounded-2xl font-bold shadow-lg shadow-orange-100 uppercase tracking-widest">Mengerti</button>
     </div>
   </div>
 
-  <div id="mainApp" class="hidden min-h-screen">
-    <header class="shopee-orange p-4 text-white shadow-md flex justify-between items-center px-8">
-      <div class="font-bold text-xl flex items-center gap-2">
-        <span onclick="location.reload()" class="cursor-pointer bg-orange-600 hover:bg-orange-700 w-8 h-8 flex items-center justify-center rounded-full transition">←</span>
-        <span>Shopee Stock Sync</span>
-      </div>
-      <div id="modeStatus" class="bg-white text-shopee px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider"></div>
-    </header>
-
-    <main class="container mx-auto p-4 md:p-8">
-      <div class="bg-white p-6 rounded shadow-sm border border-gray-100">
-        
-        <div id="fixedStoreHeader" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-orange-50 p-4 rounded border border-orange-100 hidden">
-          <div><label class="text-[10px] font-bold text-gray-400 uppercase">ID Toko</label>
-               <input type="text" id="globalStoreId" list="listTokoId" class="w-full p-2 border rounded outline-none" placeholder="Ketik ID..."></div>
-          <div><label class="text-[10px] font-bold text-gray-400 uppercase">Nama Toko</label>
-               <input type="text" id="globalStoreName" list="listTokoNama" class="w-full p-2 border rounded outline-none" placeholder="Nama otomatis..."></div>
-        </div>
-
-        <div id="fixedItemHeader" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-blue-50 p-4 rounded border border-blue-100 hidden">
-          <div><label class="text-[10px] font-bold text-gray-400 uppercase">Kode Barang</label>
-               <input type="text" id="globalCode" list="listBarangKode" class="w-full p-2 border rounded outline-none" placeholder="Ketik Kode..."></div>
-          <div><label class="text-[10px] font-bold text-gray-400 uppercase">Nama Barang</label>
-               <input type="text" id="globalName" list="listBarangNama" class="w-full p-2 border rounded outline-none" placeholder="Nama otomatis..."></div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-gray-50 border-b">
-              <tr>
-                <th id="thStore" class="p-3 text-left">Toko</th>
-                <th id="thItem" class="p-3 text-left">Item</th>
-                <th class="p-3 text-center w-32">Qty (Sisa Stok)</th>
-                <th class="p-3 text-left w-24">Tipe</th>
-                <th class="p-3 text-left">Ket</th>
-                <th class="p-3 text-center w-10"></th>
-              </tr>
-            </thead>
-            <tbody id="itemRows"></tbody>
-          </table>
-        </div>
-
-        <div class="mt-8 flex justify-between items-center border-t pt-6">
-          <button onclick="addRow()" class="text-shopee font-bold hover:text-orange-700 transition">+ TAMBAH BARIS</button>
-          <button id="submitBtn" onclick="submitData()" class="shopee-orange text-white px-10 py-3 rounded font-bold shadow-lg hover:opacity-90 active:scale-95 transition">SUBMIT SEKARANG</button>
-        </div>
-      </div>
-    </main>
+  <div id="customToast" class="flex items-center p-4 bg-white rounded-2xl shadow-2xl border-b-4 border-orange-500 min-w-[280px]">
+    <div class="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-orange-100 rounded-full text-orange-600">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+    </div>
+    <div id="toastMsg" class="ml-3 font-bold text-gray-700 text-sm italic">Data Berhasil Disimpan!</div>
   </div>
 
-  <datalist id="listTokoId"></datalist>
-  <datalist id="listTokoNama"></datalist>
-  <datalist id="listBarangKode"></datalist>
-  <datalist id="listBarangNama"></datalist>
+  <div id="loadingOverlay" class="fixed inset-0 bg-white/95 z-[9999] flex flex-col items-center justify-center">
+    <div class="w-12 h-12 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin"></div>
+    <p class="mt-4 text-orange-600 font-bold text-[10px] uppercase tracking-widest">Sinkronisasi Database...</p>
+  </div>
+
+  <nav class="shopee-orange p-4 text-white shadow-md sticky top-0 z-50">
+    <div class="container mx-auto flex justify-between items-center px-2">
+      <div class="flex flex-col">
+        <span class="font-bold text-lg leading-none italic">Gupro - System</span>
+        <span class="text-[9px] opacity-80 mt-1 tracking-tighter uppercase font-bold">Stock Management System</span>
+      </div>
+      <div id="syncStatus" class="text-[9px] bg-red-600 px-2 py-1 rounded-full font-bold">OFFLINE</div>
+    </div>
+  </nav>
+
+  <div class="container mx-auto p-4 max-w-4xl">
+    
+    <div class="bg-white rounded-2xl shadow-sm p-1.5 flex gap-1.5 mb-4 border border-gray-200">
+      <button onclick="switchMode('ONE_STORE')" id="btnModeStore" class="flex-1 py-3 rounded-xl font-bold text-[10px] transition shopee-orange text-white text-center uppercase tracking-widest">🏪 1 Toko <br> Multi Item</button>
+      <button onclick="switchMode('ONE_ITEM')" id="btnModeItem" class="flex-1 py-3 rounded-lg font-bold text-[10px] transition bg-gray-50 text-gray-400 text-center uppercase tracking-widest">📦 1 Item <br> Multi Toko</button>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-6 mb-4 border border-gray-100">
+      <div class="mb-6">
+        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">Keterangan (Global)</label>
+        <input type="text" id="globalKet" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-orange-500 text-sm transition shadow-inner" placeholder="Contoh: Alokasi Toko / Promo ...">
+      </div>
+
+      <div class="mb-6 pb-6 border-b border-dashed border-gray-100">
+        <label id="headerLabel" class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Pilih Toko Utama</label>
+        <button onclick="openSearchModal()" id="mainSelector" class="w-full flex justify-between items-center p-4 bg-orange-50 border border-orange-100 rounded-2xl text-left hover:bg-orange-100 transition">
+          <div class="flex flex-col">
+            <span id="selectedText" class="text-gray-400 text-sm font-medium italic">Klik untuk mencari...</span>
+            <div id="headerStokInfo" class="mt-2 p-2 bg-white text-orange-600 rounded-lg text-[11px] font-bold hidden border border-orange-200 text-center"></div>
+          </div>
+          <span class="text-orange-500 text-xl">🔍</span>
+        </button>
+        <input type="hidden" id="mainValue">
+        <input type="hidden" id="mainName">
+        <input type="hidden" id="mainStokVal" value="0">
+      </div>
+
+      <div id="liveCounterArea" class="hidden mb-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex justify-between items-center shadow-sm">
+        <span class="text-xs font-bold text-blue-700 uppercase tracking-tighter">Total Qty Input</span>
+        <span id="totalQtyDisplay" class="text-xl font-black text-blue-700">0</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="text-gray-400 border-b">
+            <tr>
+              <th id="colDynamic" class="pb-3 font-bold uppercase text-[10px]">Pilih Item</th>
+              <th class="pb-3 font-bold text-center w-24 text-[10px]">QTY</th>
+              <th class="pb-3 font-bold text-center w-24 text-[10px]">STOK</th>
+              <th class="pb-3 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="itemRows"></tbody>
+        </table>
+      </div>
+
+      <button onclick="addRow()" class="mt-8 w-full py-4 rounded-2xl font-bold text-[10px] tracking-widest border-2 border-dashed border-gray-100 text-gray-300 hover:text-shopee hover:border-orange-200 transition">+ Tambah Baris Baru</button>
+    </div>
+
+    <button onclick="kirimSemua()" id="btnSubmit" class="w-full shopee-orange text-white py-5 rounded-2xl font-bold shadow-2xl shadow-orange-100 hover:brightness-110 active:scale-95 transition tracking-widest uppercase italic">Simpan Data</button>
+  </div>
+
+  <div id="searchModal" class="modal-full hidden">
+    <div class="shopee-orange p-4 flex items-center gap-4 shadow-lg">
+      <button onclick="closeSearchModal()" class="text-white p-2 text-xl">✕</button>
+      <input type="text" id="searchInput" oninput="filterSearch()" class="flex-1 p-3 rounded-xl outline-none font-bold shadow-inner" placeholder="Ketik nama atau kode...">
+    </div>
+    <div id="searchList" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+  </div>
 
   <script>
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw2kzezyjTmDZ4rV2xIpJRaeG9n06kCVQ4WLaXWN0THpjWN8lFF8REeS_-igoxZajGdow/exec";
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzzAHqdavGD-gzcBnogrF0-Qy8fSRuyaZZqDkdBJCW3t012UEVv7uM7tkFQfCOWNzBN6Q/exec";
     let MASTER_DATA = { toko: [], barang: [] };
-    let CURRENT_MODE = "";
+    let CURRENT_MODE = "ONE_STORE";
+    let TARGET_ROW_EL = null;
 
-    // 1. Logika Sinkronisasi Background
     window.onload = async () => {
-      showToast("Sedang sinkronisasi data stok...");
       try {
-        const response = await fetch(WEB_APP_URL + "?action=getData");
-        if (response.ok) {
-          MASTER_DATA = await response.json();
-          populateDatalists();
-          hideToast("Data berhasil di-sinkron!");
-        } else {
-          hideToast("Gagal sinkron (Cek API)", true);
-        }
-      } catch (e) {
-        hideToast("Mode Offline (Data manual)", true);
-      }
+        const res = await fetch(WEB_APP_URL + "?action=getData");
+        MASTER_DATA = await res.json();
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        document.getElementById('syncStatus').innerText = "ONLINE";
+        document.getElementById('syncStatus').className = "text-[9px] bg-green-600 px-2 py-1 rounded-full text-white font-bold";
+        addRow(); 
+      } catch (e) { alert("Database Gagal Dimuat."); }
     };
 
+    function showAlert(msg) {
+      document.getElementById('alertMsg').innerText = msg;
+      document.getElementById('alertModal').classList.remove('hidden');
+    }
+
+    function closeAlert() {
+      document.getElementById('alertModal').classList.add('hidden');
+    }
+
     function showToast(msg) {
-      const toast = document.getElementById('toast');
-      document.getElementById('toastMsg').textContent = msg;
-      toast.classList.remove('hidden');
-      toast.style.opacity = "1";
+      const toast = document.getElementById('customToast');
+      document.getElementById('toastMsg').innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 3000);
     }
 
-    function hideToast(msg, isError = false) {
-      const toast = document.getElementById('toast');
-      const spinner = document.getElementById('toastSpinner');
-      document.getElementById('toastMsg').textContent = msg;
-      spinner.classList.add('hidden');
-      if (isError) toast.style.background = "#e53e3e";
-      else toast.style.background = "#38a169";
-      
-      setTimeout(() => { toast.style.opacity = "0"; }, 3000);
-      setTimeout(() => { toast.classList.add('hidden'); }, 3500);
-    }
-
-    function populateDatalists() {
-      const dId = document.getElementById('listTokoId');
-      const dNama = document.getElementById('listTokoNama');
-      const bKode = document.getElementById('listBarangKode');
-      const bNama = document.getElementById('listBarangNama');
-      MASTER_DATA.toko.forEach(t => {
-        dId.innerHTML += `<option value="${t.id}">`;
-        dNama.innerHTML += `<option value="${t.nama}">`;
-      });
-      MASTER_DATA.barang.forEach(b => {
-        bKode.innerHTML += `<option value="${b.kode}">`;
-        bNama.innerHTML += `<option value="${b.nama}">`;
-      });
-      setupSync(document.getElementById('globalStoreId'), document.getElementById('globalStoreName'), MASTER_DATA.toko, 'id', 'nama');
-      setupSync(document.getElementById('globalCode'), document.getElementById('globalName'), MASTER_DATA.barang, 'kode', 'nama');
-    }
-
-    function setupSync(input1, input2, dataArray, key1, key2, rowElement = null) {
-      if(!input1 || !input2) return;
-      const onInput = (e, fromKey, targetInput) => {
-        const val = e.target.value;
-        const match = dataArray.find(d => String(d[fromKey]) === val);
-        if (match) {
-          targetInput.value = match[fromKey === key1 ? key2 : key1];
-          if(rowElement && match.stok !== undefined) {
-             rowElement.querySelector('.stock-info').textContent = `Sisa: ${match.stok}`;
-          }
-        }
-      };
-      input1.addEventListener('input', (e) => onInput(e, key1, input2));
-      input2.addEventListener('input', (e) => onInput(e, key2, input1));
-    }
-
-    function startApp(mode) {
+    function switchMode(mode) {
       CURRENT_MODE = mode;
-      document.getElementById('landingPage').classList.add('hidden');
-      document.getElementById('mainApp').classList.remove('hidden');
-      document.getElementById('modeStatus').textContent = mode.replace('_', ' ');
-      document.getElementById('fixedStoreHeader').style.display = (mode === 'ONE_STORE') ? 'grid' : 'none';
-      document.getElementById('fixedItemHeader').style.display = (mode === 'ONE_ITEM') ? 'grid' : 'none';
-      document.getElementById('thStore').style.display = (mode === 'ONE_STORE') ? 'none' : '';
-      document.getElementById('thItem').style.display = (mode === 'ONE_ITEM') ? 'none' : '';
+      document.getElementById('btnModeStore').className = mode === 'ONE_STORE' ? "flex-1 py-3 rounded-xl font-bold text-[10px] shopee-orange text-white" : "flex-1 py-3 rounded-lg font-bold text-[10px] bg-gray-50 text-gray-400";
+      document.getElementById('btnModeItem').className = mode === 'ONE_ITEM' ? "flex-1 py-3 rounded-xl font-bold text-[10px] shopee-orange text-white" : "flex-1 py-3 rounded-lg font-bold text-[10px] bg-gray-50 text-gray-400";
+      document.getElementById('headerLabel').innerText = mode === 'ONE_STORE' ? "Pilih Toko Utama" : "Pilih Barang Utama";
+      document.getElementById('colDynamic').innerText = mode === 'ONE_STORE' ? "Pilih Item" : "Pilih Toko";
+      document.getElementById('liveCounterArea').style.display = mode === 'ONE_ITEM' ? "flex" : "none";
+      document.getElementById('headerStokInfo').classList.add('hidden');
+      document.getElementById('itemRows').innerHTML = "";
+      document.getElementById('selectedText').innerText = "Klik untuk mencari...";
+      document.getElementById('mainValue').value = "";
+      document.getElementById('mainStokVal').value = "0";
+      document.getElementById('totalQtyDisplay').innerText = "0";
       addRow();
     }
 
     function addRow() {
       const tbody = document.getElementById('itemRows');
-      const tr = document.createElement('tr');
-      tr.className = "border-b hover:bg-gray-50 transition";
-      let storeHtml = `<td class="p-2"><div class="flex flex-col gap-1">
-          <input type="text" list="listTokoId" placeholder="ID" class="w-full p-1 border rounded s-id text-[11px]">
-          <input type="text" list="listTokoNama" placeholder="Nama Toko" class="w-full p-1 border rounded s-name text-[11px]">
-        </div></td>`;
-      let itemHtml = `<td class="p-2"><div class="flex flex-col gap-1">
-          <input type="text" list="listBarangKode" placeholder="Kode" class="w-full p-1 border rounded b-code text-[11px]">
-          <input type="text" list="listBarangNama" placeholder="Nama Barang" class="w-full p-1 border rounded b-name text-[11px]">
-        </div></td>`;
-
-      if (CURRENT_MODE === 'ONE_STORE') storeHtml = `<td class="hidden"></td>`;
-      if (CURRENT_MODE === 'ONE_ITEM') itemHtml = `<td class="hidden"></td>`;
-
-      tr.innerHTML = `${storeHtml} ${itemHtml}
-        <td class="p-2 flex flex-col items-center">
-          <input type="number" value="1" min="1" class="w-16 p-1 border rounded q-qty text-center text-sm font-bold">
-          <span class="stock-info text-[10px] text-orange-600 font-bold mt-1">Sisa: 0</span>
+      const row = document.createElement('tr');
+      row.className = "border-b last:border-0";
+      const isOneStore = (CURRENT_MODE === 'ONE_STORE');
+      row.innerHTML = `
+        <td class="py-5">
+          <button onclick="openSearchModal(this)" class="w-full text-left p-3 bg-gray-50 border border-gray-100 rounded-xl text-[11px] truncate row-selector">Pilih...</button>
+          <input type="hidden" class="row-val"><input type="hidden" class="row-name"><input type="hidden" class="row-stok-val" value="0">
         </td>
-        <td class="p-2"><select class="w-full p-1 border rounded q-type text-xs font-bold bg-white">
-          <option value="OUT">OUT</option><option value="IN">IN</option><option value="ADJ">ADJ</option>
-        </select></td>
-        <td class="p-2"><input type="text" placeholder="..." class="w-full p-1 border rounded q-ket text-xs"></td>
-        <td class="p-2 text-center"><button onclick="this.parentElement.parentElement.remove()" class="text-red-300 hover:text-red-500 text-lg">✕</button></td>`;
-      tbody.appendChild(tr);
-      if(CURRENT_MODE !== 'ONE_STORE') setupSync(tr.querySelector('.s-id'), tr.querySelector('.s-name'), MASTER_DATA.toko, 'id', 'nama');
-      if(CURRENT_MODE !== 'ONE_ITEM') setupSync(tr.querySelector('.b-code'), tr.querySelector('.b-name'), MASTER_DATA.barang, 'kode', 'nama', tr);
+        <td class="py-5 px-1">
+          <input type="number" value="1" min="1" oninput="hitungLive()" class="w-full p-2 border rounded-xl font-bold text-center text-sm row-qty">
+        </td>
+        <td class="py-5 px-1 text-center font-bold text-orange-600 text-[11px] row-stok-label">
+          ${isOneStore ? '0' : '-'}
+        </td>
+        <td class="py-5 text-right">
+          <button onclick="this.parentElement.parentElement.remove(); hitungLive();" class="text-gray-200 hover:text-red-500 transition">✕</button>
+        </td>
+      `;
+      tbody.appendChild(row);
     }
 
-    async function submitData() {
-      const btn = document.getElementById('submitBtn');
+    function hitungLive() {
+      if (CURRENT_MODE !== 'ONE_ITEM') return;
+      let total = 0;
+      document.querySelectorAll('#itemRows tr').forEach(row => {
+        total += parseInt(row.querySelector('.row-qty').value) || 0;
+      });
+      const display = document.getElementById('totalQtyDisplay');
+      const stokMax = parseInt(document.getElementById('mainStokVal').value) || 0;
+      display.innerText = total;
+      display.className = total > stokMax ? "text-2xl font-black text-red-600 animate-pulse" : "text-2xl font-black text-blue-700";
+    }
+
+    function openSearchModal(el = null) {
+      TARGET_ROW_EL = el;
+      document.getElementById('searchModal').classList.remove('hidden');
+      const sInput = document.getElementById('searchInput');
+      sInput.value = "";
+      setTimeout(() => sInput.focus(), 150);
+      filterSearch();
+    }
+
+    function closeSearchModal() { document.getElementById('searchModal').classList.add('hidden'); }
+
+    function filterSearch() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const listDiv = document.getElementById('searchList');
+      listDiv.innerHTML = "";
+      let data = (CURRENT_MODE === 'ONE_STORE') ? (TARGET_ROW_EL ? MASTER_DATA.barang : MASTER_DATA.toko) : (TARGET_ROW_EL ? MASTER_DATA.toko : MASTER_DATA.barang);
+
+      data.filter(i => (i.nama||"").toLowerCase().includes(q) || (i.id||i.kode||"").toLowerCase().includes(q)).forEach(i => {
+        const div = document.createElement('div');
+        div.className = "p-4 bg-gray-50 rounded-2xl border border-gray-100 active:bg-orange-50 active:border-orange-200 transition flex flex-col";
+        const val = i.id || i.kode;
+        const stokInfo = i.stok !== undefined ? ` | Sisa Stok: ${i.stok}` : "";
+        div.innerHTML = `<span class="font-bold text-gray-800">${i.nama}</span><span class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">${val}${stokInfo}</span>`;
+        div.onclick = () => selectItem(val, i.nama, i.stok || 0);
+        listDiv.appendChild(div);
+      });
+    }
+
+    function selectItem(val, name, stok) {
+      if(!TARGET_ROW_EL) {
+        document.getElementById('selectedText').innerText = name;
+        document.getElementById('selectedText').classList.remove('text-gray-400', 'italic');
+        document.getElementById('mainValue').value = val;
+        document.getElementById('mainName').value = name;
+        document.getElementById('mainStokVal').value = stok;
+        if(CURRENT_MODE === 'ONE_ITEM') {
+          const infoBox = document.getElementById('headerStokInfo');
+          infoBox.innerHTML = `SISA STOK GUDANG: <span class="text-base ml-1 font-black">${stok}</span>`;
+          infoBox.classList.remove('hidden');
+        }
+      } else {
+        const p = TARGET_ROW_EL.parentElement;
+        const row = p.parentElement;
+        TARGET_ROW_EL.innerText = name;
+        p.querySelector('.row-val').value = val;
+        p.querySelector('.row-name').value = name;
+        if (CURRENT_MODE === 'ONE_STORE') {
+          p.querySelector('.row-stok-val').value = stok;
+          row.querySelector('.row-stok-label').innerText = stok;
+        } else {
+          row.querySelector('.row-stok-label').innerText = "-";
+        }
+      }
+      closeSearchModal();
+      hitungLive();
+    }
+
+    async function kirimSemua() {
+      const mainVal = document.getElementById('mainValue').value;
+      const globalKet = document.getElementById('globalKet').value;
       const rows = document.querySelectorAll('#itemRows tr');
+      if(!mainVal) return alert("Pilih data utama!");
+
       let payload = [];
-      rows.forEach(row => {
-        let sId = (CURRENT_MODE === 'ONE_STORE') ? document.getElementById('globalStoreId').value : row.querySelector('.s-id').value;
-        let sName = (CURRENT_MODE === 'ONE_STORE') ? document.getElementById('globalStoreName').value : row.querySelector('.s-name').value;
-        let bCode = (CURRENT_MODE === 'ONE_ITEM') ? document.getElementById('globalCode').value : row.querySelector('.b-code').value;
-        let bName = (CURRENT_MODE === 'ONE_ITEM') ? document.getElementById('globalName').value : row.querySelector('.b-name').value;
-        if (sId && bCode) {
-          payload.push({ storeId: sId, storeName: sName, code: bCode, product: bName,
-            qty: parseInt(row.querySelector('.q-qty').value),
-            type: row.querySelector('.q-type').value, ket: row.querySelector('.q-ket').value
+      let summaryQty = {};
+
+      if(CURRENT_MODE === 'ONE_ITEM') {
+        let totalOut = 0;
+        rows.forEach(r => totalOut += (parseInt(r.querySelector('.row-qty').value) || 0));
+        const stokMax = parseInt(document.getElementById('mainStokVal').value);
+        if(totalOut > stokMax) {
+          showAlert("Total keluar ("+totalOut+") melebihi stok gudang ("+stokMax+").");
+          return;
+        }
+      }
+
+      let rowValid = true;
+      rows.forEach(r => {
+        const rowVal = r.querySelector('.row-val').value;
+        const rowName = r.querySelector('.row-name').value;
+        const qty = parseInt(r.querySelector('.row-qty').value) || 0;
+        const stokAwal = parseInt(r.querySelector('.row-stok-val').value) || 0;
+
+        if(rowVal) {
+          if (CURRENT_MODE === 'ONE_STORE') {
+            if (!summaryQty[rowVal]) summaryQty[rowVal] = { total: 0, stok: stokAwal, nama: rowName };
+            summaryQty[rowVal].total += qty;
+          }
+          payload.push({
+            storeId: (CURRENT_MODE === 'ONE_STORE') ? mainVal : rowVal,
+            storeName: (CURRENT_MODE === 'ONE_STORE') ? document.getElementById('mainName').value : rowName,
+            code: (CURRENT_MODE === 'ONE_STORE') ? rowVal : mainVal,
+            product: (CURRENT_MODE === 'ONE_STORE') ? rowName : document.getElementById('mainName').value,
+            qty: qty, ket: globalKet
           });
         }
       });
-      if (payload.length === 0) return alert("Data kosong!");
-      btn.disabled = true; btn.textContent = "SEDANG MENGIRIM...";
+
+      if (CURRENT_MODE === 'ONE_STORE') {
+        for (let code in summaryQty) {
+          if (summaryQty[code].total > summaryQty[code].stok) {
+            showAlert("Produk '" + summaryQty[code].nama + "' total input (" + summaryQty[code].total + ") melebihi stok (" + summaryQty[code].stok + ")");
+            rowValid = false;
+            break;
+          }
+        }
+      }
+
+      if(!rowValid || payload.length === 0) return; // PERBAIKAN: Berhenti jika validasi gagal
+
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true; btn.innerText = "SEDANG MENYIMPAN DATA...";
+
       try {
         await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-        alert("Submit Berhasil!");
-        location.reload();
-      } catch (e) {
-        alert("Gagal: " + e);
-        btn.disabled = false; btn.textContent = "SUBMIT SEKARANG";
-      }
+        showToast("Berhasil! Data Berhasil Disimpan");
+        setTimeout(() => { location.reload(); }, 2000);
+      } catch (e) { alert("Error Server"); btn.disabled = false; }
     }
   </script>
 </body>
